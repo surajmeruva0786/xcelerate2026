@@ -20,9 +20,9 @@ export function DashboardHeader() {
         {/* Area Selector */}
         <select className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent outline-none">
           <option>All Industrial Areas</option>
-          <option>Raipur Industrial Zone</option>
-          <option>Bhilai Industrial Zone</option>
-          <option>Durg Industrial Zone</option>
+          <option>Gondwara</option>
+          <option>Kapan</option>
+          <option>Amaseoni</option>
         </select>
 
         {/* Date Range Selector */}
