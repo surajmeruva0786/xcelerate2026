@@ -7,13 +7,31 @@ from playwright.async_api import async_playwright
 
 DOWNLOAD_DIR = "downloads"
 
-async def run():
+async def run(area_name):
+    """
+    Run the scraping script for a given industrial area.
+    
+    Args:
+        area_name (str): Name of the industrial area (e.g., 'Gondwara', 'Kapan', 'Amaseoni')
+    
+    Returns:
+        dict: Result containing status, image_path, and json_path
+    """
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-
-    area_name = input("Enter Industrial Area name (e.g., Gondwara): ").strip()
+    
+    result = {
+        "status": "error",
+        "area_name": area_name,
+        "image_path": None,
+        "json_path": None,
+        "error": None
+    }
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+        # Detect if running in production (Render)
+        is_production = os.environ.get('RENDER') or os.environ.get('PORT')
+        
+        browser = await p.chromium.launch(headless=bool(is_production))
         context = await browser.new_context(accept_downloads=True)
         page = await context.new_page()
 
@@ -73,10 +91,12 @@ async def run():
                 file_path = os.path.join(DOWNLOAD_DIR, new_filename)
                 
                 await download.save_as(file_path)
+                result["image_path"] = file_path
+                print(f"✓ Downloaded: {file_path}")
                 
             except Exception as e:
                 print(f"Download error: {e}")
-                # Continue even if download fails
+                result["error"] = f"Download failed: {str(e)}"
 
             # Wait for export dialog to close
             await page.wait_for_timeout(3000)
@@ -206,20 +226,29 @@ async def run():
                 with open(json_path, 'w', encoding='utf-8') as json_file:
                     json.dump(json_data, json_file, indent=2, ensure_ascii=False)
                 
-                print(f"JSON saved: {json_path}")
+                result["json_path"] = json_path
+                result["status"] = "success"
+                print(f"✓ JSON saved: {json_path}")
                 
             except Exception as e:
                 print(f"Error saving JSON: {e}")
+                result["error"] = f"JSON save failed: {str(e)}"
 
             # Keep browser open for a moment to see results
             await page.wait_for_timeout(2000)
 
         except Exception as e:
             print(f"Fatal error: {e}")
+            result["error"] = f"Fatal error: {str(e)}"
         
         finally:
             await browser.close()
+    
+    return result
 
 # Run script
 if __name__ == "__main__":
-    asyncio.run(run())
+    import sys
+    area = sys.argv[1] if len(sys.argv) > 1 else "Kapan"
+    result = asyncio.run(run(area))
+    print(json.dumps(result, indent=2))

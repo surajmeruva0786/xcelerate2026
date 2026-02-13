@@ -1,2 +1,8 @@
 backend/venv
 .env
+node_modules
+backend/chatgpt_config.py
+*.pyc
+__pycache__/
+dist/
+build/

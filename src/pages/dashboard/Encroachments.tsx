@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layers, ZoomIn, ZoomOut, Maximize2, X, MapPin } from 'lucide-react';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
+
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
 
 const encroachmentData = [
   { plotId: 'IND-1234', area: 150, severity: 'High', location: 'Raipur Zone A' },
@@ -17,6 +19,37 @@ export default function Encroachments() {
   const [showEncroachments, setShowEncroachments] = useState(true);
   const [showRoadDeviation, setShowRoadDeviation] = useState(false);
   const [selectedPlot, setSelectedPlot] = useState<string | null>(null);
+  const [analysisResults, setAnalysisResults] = useState<any>(null);
+
+  useEffect(() => {
+    // Load existing results from localStorage
+    const stored = localStorage.getItem('analysisResults');
+    if (stored) {
+      setAnalysisResults(JSON.parse(stored));
+    }
+
+    // Listen for new analysis results
+    const handleAnalysisComplete = (event: any) => {
+      setAnalysisResults(event.detail);
+    };
+
+    window.addEventListener('analysisComplete', handleAnalysisComplete);
+    return () => window.removeEventListener('analysisComplete', handleAnalysisComplete);
+  }, []);
+
+  // Get the map image URL - prefer superimposed, fallback to industrial area, then default
+  const getMapImageUrl = () => {
+    // Use superimposed image if available (result of ChatGPT superimposition)
+    if (analysisResults?.images?.superimposed) {
+      return `${API_URL}/api/images/${analysisResults.images.superimposed}`;
+    }
+    // Fallback to industrial area map from CSIDC
+    if (analysisResults?.images?.industrial_area) {
+      return `${API_URL}/api/images/${analysisResults.images.industrial_area}`;
+    }
+    // Default fallback image
+    return "https://images.unsplash.com/photo-1546833998-07256bcc76ad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkaWdpdGFsJTIwbWFwJTIwZ2Vvc3BhdGlhbCUyMEluZGlhJTIwdGVjaG5vbG9neXxlbnwxfHx8fDE3NzA5MTg3NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080";
+  };
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -38,11 +71,12 @@ export default function Encroachments() {
         {/* Map Container */}
         <div className="absolute inset-0">
           <ImageWithFallback
-            src="https://images.unsplash.com/photo-1546833998-07256bcc76ad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkaWdpdGFsJTIwbWFwJTIwZ2Vvc3BhdGlhbCUyMEluZGlhJTIwdGVjaG5vbG9neXxlbnwxfHx8fDE3NzA5MTg3NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080"
+            src={getMapImageUrl()}
             alt="Encroachment Map"
             className="w-full h-full object-cover"
+            key={analysisResults?.images?.industrial_area || 'default'}
           />
-          
+
           {/* Map overlay with encroachment highlights */}
           {showEncroachments && (
             <>
@@ -159,11 +193,10 @@ export default function Encroachments() {
             {encroachmentData.map((item, index) => (
               <div
                 key={index}
-                className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                  selectedPlot === item.plotId
-                    ? 'border-teal-600 bg-teal-50'
-                    : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
-                }`}
+                className={`p-4 border rounded-lg cursor-pointer transition-all ${selectedPlot === item.plotId
+                  ? 'border-teal-600 bg-teal-50'
+                  : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                  }`}
                 onClick={() => setSelectedPlot(item.plotId)}
               >
                 <div className="flex items-start justify-between mb-2">
