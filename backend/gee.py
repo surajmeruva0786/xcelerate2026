@@ -9,7 +9,7 @@ def fetch_satellite_image_mapbox(latitude, longitude, area_name):
     Fetch satellite image using Mapbox Static API (free tier available)
     """
     try:
-        access_token = "pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw"
+        access_token = "your-api-key"
         
         base_url = f"https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static"
         
