@@ -1,4 +1,4 @@
-"""
+﻿"""
 Test script for ChatGPT image superimposition with verbose output
 """
 import asyncio
@@ -20,12 +20,12 @@ async def test_chatgpt():
     osm_image = "downloads/osm_Kapan_2026-02-13.png"
     area_name = "Kapan"
     
-    print(f"📁 CSIDC Image: {csidc_image}")
-    print(f"📁 OSM Image: {osm_image}")
-    print(f"📍 Area Name: {area_name}")
+    print(f"ðŸ“ CSIDC Image: {csidc_image}")
+    print(f"ðŸ“ OSM Image: {osm_image}")
+    print(f"ðŸ“ Area Name: {area_name}")
     print()
     
-    print(f"🔐 Using credentials:")
+    print(f"ðŸ” Using credentials:")
     print(f"   Email: {chatgpt_config.CHATGPT_EMAIL}")
     print(f"   Password: {'*' * len(chatgpt_config.CHATGPT_PASSWORD)}")
     print()
@@ -50,9 +50,9 @@ async def test_chatgpt():
     print("="*70)
     print(f"Status: {result['status']}")
     if result['status'] == 'success':
-        print(f"✅ Superimposed Image: {result['superimposed_image']}")
+        print(f"âœ… Superimposed Image: {result['superimposed_image']}")
     else:
-        print(f"❌ Error: {result['error']}")
+        print(f"âŒ Error: {result['error']}")
     print("="*70)
     
     return result

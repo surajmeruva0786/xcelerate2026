@@ -1,4 +1,4 @@
-"""
+﻿"""
 Gemini API Image Superimposition
 Uses Google Gemini API to analyze and help superimpose two map images
 """
@@ -50,14 +50,14 @@ def superimpose_with_gemini(csidc_image_path, osm_image_path, area_name):
         print("[STEP 1] Configuring Gemini API...")
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
-        print("  ✓ Gemini API configured")
+        print("  âœ“ Gemini API configured")
         
         # Load images
         print("[STEP 2] Loading images...")
         csidc_img = Image.open(csidc_image_path)
         osm_img = Image.open(osm_image_path)
-        print(f"  ✓ CSIDC image loaded: {csidc_img.size}")
-        print(f"  ✓ OSM image loaded: {osm_img.size}")
+        print(f"  âœ“ CSIDC image loaded: {csidc_img.size}")
+        print(f"  âœ“ OSM image loaded: {osm_img.size}")
         
         # Since Gemini doesn't generate images, we'll use OpenCV to do the actual overlay
         # But first, let's use Gemini to analyze the images
@@ -78,12 +78,12 @@ def superimpose_with_gemini(csidc_image_path, osm_image_path, area_name):
         """
         
         response = model.generate_content([prompt, csidc_img, osm_img])
-        print("  ✓ Gemini analysis complete")
-        print(f"\n{'─'*70}")
+        print("  âœ“ Gemini analysis complete")
+        print(f"\n{'â”€'*70}")
         print("Gemini Analysis:")
-        print(f"{'─'*70}")
+        print(f"{'â”€'*70}")
         print(response.text)
-        print(f"{'─'*70}\n")
+        print(f"{'â”€'*70}\n")
         
         # Now create the superimposed image using OpenCV
         print("[STEP 4] Creating superimposed image with OpenCV...")
@@ -94,14 +94,14 @@ def superimpose_with_gemini(csidc_image_path, osm_image_path, area_name):
         
         # Resize CSIDC to match OSM dimensions
         csidc_resized = cv2.resize(csidc_cv, (osm_cv.shape[1], osm_cv.shape[0]))
-        print(f"  → Resized CSIDC to match OSM: {osm_cv.shape[1]}x{osm_cv.shape[0]}")
+        print(f"  â†’ Resized CSIDC to match OSM: {osm_cv.shape[1]}x{osm_cv.shape[0]}")
         
         # Create overlay with transparency
         # Method: Blend with 50% opacity
         alpha = 0.5  # Transparency factor
         superimposed = cv2.addWeighted(osm_cv, 1-alpha, csidc_resized, alpha, 0)
         
-        print("  ✓ Images blended successfully")
+        print("  âœ“ Images blended successfully")
         
         # Save result
         current_date = datetime.now().strftime("%Y-%m-%d")
@@ -112,16 +112,16 @@ def superimpose_with_gemini(csidc_image_path, osm_image_path, area_name):
         
         result["superimposed_image"] = filepath
         result["status"] = "success"
-        print(f"  ✓ Saved: {filepath}")
+        print(f"  âœ“ Saved: {filepath}")
         
         print("\n" + "="*70)
-        print("✅ SUCCESS!")
+        print("âœ… SUCCESS!")
         print("="*70)
         print(f"Superimposed image created: {filepath}")
         print("="*70)
         
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\nâŒ Error: {e}")
         result["error"] = str(e)
         import traceback
         traceback.print_exc()
@@ -156,9 +156,9 @@ def main():
     result = superimpose_with_gemini(csidc_image, osm_image, area_name)
     
     if result['status'] == 'success':
-        print(f"\n✅ Result: {result['superimposed_image']}")
+        print(f"\nâœ… Result: {result['superimposed_image']}")
     else:
-        print(f"\n❌ Error: {result['error']}")
+        print(f"\nâŒ Error: {result['error']}")
     
     return result
 

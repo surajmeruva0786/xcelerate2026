@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+﻿from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import asyncio
 import os
@@ -61,7 +61,7 @@ def run_analysis():
         json_path = script_result.get('json_path')
         image_path = script_result.get('image_path')
         
-        print(f"✓ Script.py completed")
+        print(f"âœ“ Script.py completed")
         print(f"  - Image: {image_path}")
         print(f"  - JSON: {json_path}\n")
         
@@ -70,6 +70,8 @@ def run_analysis():
         gee_result = gee.main(json_path)
         
         if gee_result['status'] != 'success':
+            print(f"❌ GEE.py failed! Error: {gee_result.get('error')}")
+            print(f"Detailed Result: {json.dumps(gee_result, indent=2, default=str)}")
             return jsonify({
                 "status": "error",
                 "error": f"GEE.py failed: {gee_result.get('error', 'Unknown error')}"
@@ -78,26 +80,42 @@ def run_analysis():
         satellite_path = gee_result.get('satellite_image')
         osm_path = gee_result.get('osm_image')
         
-        print(f"✓ GEE.py completed")
+        print(f"âœ“ GEE.py completed")
         print(f"  - Satellite: {satellite_path}")
         print(f"  - OSM: {osm_path}\n")
         
-        # Step 3: Run OpenCV superimposition
-        print("Step 3: Running OpenCV superimposition...")
-        superimpose_result = opencv_superimpose.superimpose_with_opencv(
-            image_path,  # CSIDC image
-            osm_path,    # OSM image
-            zone
-        )
+        # Step 3: Run Encroachment Detection
+        print("Step 3: Running Encroachment Detection...")
         
-        superimposed_path = None
-        if superimpose_result['status'] == 'success':
-            superimposed_path = superimpose_result.get('superimposed_image')
-            print(f"✓ ChatGPT superimposition completed")
-            print(f"  - Superimposed: {superimposed_path}\n")
+        # We need historical_satellite and current_satellite from gee_result
+        # gee.py returns:
+        # "current_satellite": path
+        # "historical_satellite_2years" or "historical_satellite": path (depending on version)
+        
+        # Let's handle keys safely
+        past_sat_path = gee_result.get('historical_satellite_2years') or gee_result.get('historical_satellite')
+        current_sat_path = gee_result.get('current_satellite') or gee_result.get('satellite_image') # fallback
+        
+        if not past_sat_path or not current_sat_path:
+             print(f"âš  Missing satellite images for detection. Past: {past_sat_path}, Present: {current_sat_path}")
+             encroachment_result = {"status": "skipped", "error": "Missing satellite images"}
         else:
-            print(f"⚠ ChatGPT superimposition failed: {superimpose_result.get('error')}")
-            print("  Continuing with other images...\n")
+            try:
+                detector = opencv_superimpose.EncroachmentDetector(zone)
+                encroachment_result = detector.process(
+                    image_path,      # CSIDC map (boundary source)
+                    past_sat_path,   # Past Satellite (Yellow)
+                    current_sat_path # Present Satellite (Blue)
+                )
+                print(f"âœ“ Encroachment Analysis completed")
+                print(f"  - Analysis Image: {encroachment_result.get('analysis_image')}")
+                print(f"  - Metrics: {encroachment_result.get('metrics')}\n")
+            except Exception as e:
+                print(f"âš  Encroachment Analysis failed: {e}")
+                import traceback
+                traceback.print_exc()
+                encroachment_result = {"status": "error", "error": str(e)}
+
         
         # Prepare response with image filenames
         response = {
@@ -105,10 +123,14 @@ def run_analysis():
             "zone": zone,
             "images": {
                 "industrial_area": os.path.basename(image_path) if image_path else None,
-                "satellite": os.path.basename(satellite_path) if satellite_path else None,
+                "satellite_present": os.path.basename(current_sat_path) if current_sat_path else None,
+                "satellite_past": os.path.basename(past_sat_path) if past_sat_path else None,
                 "osm": os.path.basename(osm_path) if osm_path else None,
-                "superimposed": os.path.basename(superimposed_path) if superimposed_path else None
-            }
+                "encroachment_analysis": os.path.basename(encroachment_result.get('analysis_image')) if encroachment_result.get('status') == 'success' else None,
+                "past_overlay": os.path.basename(encroachment_result.get('past_overlay')) if encroachment_result.get('status') == 'success' else None,
+                "present_overlay": os.path.basename(encroachment_result.get('present_overlay')) if encroachment_result.get('status') == 'success' else None
+            },
+            "metrics": encroachment_result.get('metrics') if encroachment_result.get('status') == 'success' else None
         }
         
         print(f"{'='*60}")
@@ -118,7 +140,7 @@ def run_analysis():
         return jsonify(response), 200
         
     except Exception as e:
-        print(f"✗ Error in run_analysis: {str(e)}")
+        print(f"âœ— Error in run_analysis: {str(e)}")
         return jsonify({
             "status": "error",
             "error": str(e)
