@@ -3,8 +3,8 @@ services:
     name: xcelerate2026-backend
     env: python
     region: oregon
-    buildCommand: ./render-build.sh
-    startCommand: gunicorn app:app
+    buildCommand: bash render-build.sh
+    startCommand: cd backend && gunicorn app:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
