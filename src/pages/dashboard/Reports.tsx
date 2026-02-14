@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { FileText, Download, Eye, Plus, Calendar, CheckCircle, Clock } from 'lucide-react';
 
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
+
 export default function Reports() {
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
@@ -57,7 +59,7 @@ export default function Reports() {
               onClick={async () => {
                 if (!analysisResults) return;
                 try {
-                  const response = await fetch('http://localhost:5000/api/generate-report', {
+                  const response = await fetch(`${API_URL}/api/generate-report`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(analysisResults),
