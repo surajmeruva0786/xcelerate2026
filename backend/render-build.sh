@@ -9,10 +9,9 @@ ls -la
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Install system dependencies for Playwright
-playwright install-deps chromium
-
-# Install Playwright browsers
-playwright install chromium
+# Install Playwright browsers without system dependencies
+# Render's environment should have the necessary system libs
+echo "Installing Playwright browsers..."
+playwright install chromium --with-deps || playwright install chromium
 
 echo "Build completed successfully!"
