@@ -1,20 +1,34 @@
 ﻿from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from dotenv import load_dotenv
 import asyncio
 import os
 import json
 from datetime import datetime
 import sys
 
+# Load environment variables
+load_dotenv()
+
 # Import our scripts
 import script
 import gee
+import gee
 import opencv_superimpose
+import groq_service
+import dashboard_insights_service
+import report_service
+
+
+
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend communication
 
-DOWNLOAD_DIR = "downloads"
+# Define absolute path for downloads directory (pointing to project_root/downloads)
+# app.py is in backend/, so we go up one level
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 
 @app.route('/api/run-analysis', methods=['POST'])
 def run_analysis():
@@ -115,6 +129,87 @@ def run_analysis():
                 import traceback
                 traceback.print_exc()
                 encroachment_result = {"status": "error", "error": str(e)}
+        
+        # Step 4: Run Groq Vision Analysis (if encroachment detection succeeded)
+        groq_analysis = None
+        if encroachment_result.get('status') == 'success':
+            print("Step 4: Running Groq Vision Analysis...")
+            try:
+                groq_analysis = groq_service.analyze_encroachment(
+                    past_sat_path,
+                    current_sat_path,
+                    encroachment_result.get('analysis_image'),
+                    area_name=zone
+                )
+                
+                if groq_analysis.get('error'):
+                    print(f"⚠ Groq Analysis failed: {groq_analysis['error']}")
+                    print("  Continuing without AI analysis...")
+                else:
+                    print(f"✓ Groq Analysis completed")
+                    print(f"  - Status: {groq_analysis.get('encroachment_status')}")
+                    print(f"  - Construction: {groq_analysis.get('construction_percentage')}%")
+                    print(f"  - Vegetation: {groq_analysis.get('vegetation_percentage')}%")
+                    print(f"  - Idle Status: {groq_analysis.get('idle_status')}\n")
+            except Exception as e:
+                print(f"⚠ Groq Analysis exception: {e}")
+                print("  Continuing without AI analysis...")
+                groq_analysis = {"error": str(e)}
+        else:
+            print("⚠ Skipping Groq Analysis (encroachment detection failed)\n")
+
+        
+        # Step 5: Generate Comprehensive Dashboard Insights
+        dashboard_insights = None
+        if groq_analysis and not groq_analysis.get('error'):
+            print("Step 5: Generating Comprehensive Report with LLM...")
+            try:
+                dashboard_insights = dashboard_insights_service.generate_comprehensive_report(
+                    zone,
+                    encroachment_result.get('metrics') if encroachment_result.get('status') == 'success' else None,
+                    groq_analysis
+                )
+                
+                if dashboard_insights.get('error'):
+                    print(f"⚠ Insights generation failed: {dashboard_insights['error']}")
+                    print("  Continuing without LLM insights...")
+                else:
+                    print(f"✓ Comprehensive Report Generated")
+                    print(f"  - Sections: {list(dashboard_insights.keys())}\n")
+            except Exception as e:
+                print(f"⚠ Report generation exception: {e}")
+                print("  Continuing without LLM insights...")
+                dashboard_insights = {"error": str(e)}
+        else:
+            print("⚠ Skipping Dashboard Insights (Groq analysis unavailable)\n")
+
+        # Step 6: Detailed Plot Status Detection (New Step)
+        plot_status = None
+        if encroachment_result.get('status') == 'success' and image_path:
+             print("Step 6: Detecting specific plot status (Encroachment/Idle/Veg)...")
+             try:
+                 plot_status = groq_service.detect_plot_status(
+                     image_path, # Original CSIDC map with plot numbers
+                     encroachment_result.get('analysis_image'), # Analysis result
+                     zone
+                 )
+                 
+                 if plot_status.get('error'):
+                     print(f"⚠ Plot status detection failed: {plot_status['error']}")
+                 else:
+                     print(f"✓ Plot Status Detected")
+                     print(f"  - Encroachment Risk: {plot_status.get('encroachment_plots')}")
+                     print(f"  - Idle: {plot_status.get('idle_plots')}")
+                     
+                     # Merge into dashboard_insights if it exists, or create a partial one
+                     if dashboard_insights:
+                         dashboard_insights['plot_status'] = plot_status
+                     else:
+                         dashboard_insights = {'plot_status': plot_status}
+                         
+             except Exception as e:
+                 print(f"⚠ Plot detection exception: {e}")
+
 
         
         # Prepare response with image filenames
@@ -130,7 +225,9 @@ def run_analysis():
                 "past_overlay": os.path.basename(encroachment_result.get('past_overlay')) if encroachment_result.get('status') == 'success' else None,
                 "present_overlay": os.path.basename(encroachment_result.get('present_overlay')) if encroachment_result.get('status') == 'success' else None
             },
-            "metrics": encroachment_result.get('metrics') if encroachment_result.get('status') == 'success' else None
+            "metrics": encroachment_result.get('metrics') if encroachment_result.get('status') == 'success' else None,
+            "groq_analysis": groq_analysis if groq_analysis and not groq_analysis.get('error') else None,
+            "dashboard_insights": dashboard_insights if dashboard_insights and not dashboard_insights.get('error') else None
         }
         
         print(f"{'='*60}")
@@ -168,6 +265,30 @@ def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat()
     }), 200
+
+
+@app.route('/api/generate-report', methods=['POST'])
+def generate_report():
+    """
+    Generate a PDF report based on current analysis data.
+    Expected JSON: Full analysis object (metrics, insights, images)
+    """
+    try:
+        data = request.get_json()
+        zone = data.get('zone', 'Unknown-Zone')
+        
+        # Call report service
+        result = report_service.generate_pdf_report(zone, data)
+        
+        if result['status'] == 'success':
+            filename = result['filename']
+            return send_from_directory(DOWNLOAD_DIR, filename, as_attachment=True)
+        else:
+            return jsonify(result), 500
+            
+    except Exception as e:
+         print(f"Report generation error: {e}")
+         return jsonify({"status": "error", "error": str(e)}), 500
 
 if __name__ == '__main__':
     # Create downloads directory if it doesn't exist

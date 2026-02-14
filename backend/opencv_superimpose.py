@@ -8,7 +8,9 @@ import numpy as np
 from datetime import datetime
 import json
 
-DOWNLOAD_DIR = "downloads"
+# opencv_superimpose.py is in backend/, so we go up one level
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 
 class EncroachmentDetector:
     def __init__(self, area_name):

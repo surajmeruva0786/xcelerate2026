@@ -5,7 +5,10 @@ import json
 from datetime import datetime
 from playwright.async_api import async_playwright
 
-DOWNLOAD_DIR = "downloads"
+# Define absolute path for downloads directory (pointing to project_root/downloads)
+# script.py is in backend/, so we go up one level
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 
 async def run(area_name):
     """

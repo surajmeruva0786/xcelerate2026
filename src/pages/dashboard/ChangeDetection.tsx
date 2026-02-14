@@ -1,17 +1,62 @@
-import { useState } from 'react';
-import { ArrowLeftRight, Download, TrendingUp, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeftRight, Download, TrendingUp, AlertCircle, Layers, Calendar, History, ArrowRight } from 'lucide-react';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
 
-const significantChanges = [
-  { plotId: 'IND-1234', changeType: 'Built-Up Increase', magnitude: 85, t1: 3200, t2: 4200 },
-  { plotId: 'IND-5678', changeType: 'Built-Up Increase', magnitude: 72, t1: 2100, t2: 2800 },
-  { plotId: 'IND-9012', changeType: 'Built-Up Increase', magnitude: 45, t1: 3500, t2: 3900 },
-  { plotId: 'IND-3456', changeType: 'Vegetation Loss', magnitude: 38, t1: 4800, t2: 1200 },
-  { plotId: 'IND-7890', changeType: 'Built-Up Increase', magnitude: 92, t1: 2100, t2: 2650 },
-];
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
 
 export default function ChangeDetection() {
   const [sliderPosition, setSliderPosition] = useState(50);
+  const [analysisResults, setAnalysisResults] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    // Load existing results from localStorage
+    const stored = localStorage.getItem('analysisResults');
+    if (stored) {
+      setAnalysisResults(JSON.parse(stored));
+    }
+
+    // Listen for new analysis results
+    const handleAnalysisComplete = (event: any) => {
+      setAnalysisResults(event.detail);
+    };
+
+    window.addEventListener('analysisComplete', handleAnalysisComplete);
+    return () => window.removeEventListener('analysisComplete', handleAnalysisComplete);
+  }, []);
+
+  const changesData = analysisResults?.dashboard_insights?.change_detection || [];
+
+  // Get before/after images
+  const getBeforeImage = () => {
+    if (analysisResults?.images?.satellite_past) return `${API_URL}/api/images/${analysisResults.images.satellite_past}`;
+    return "https://images.unsplash.com/photo-1546833998-07256bcc76ad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkaWdpdGFsJTIwbWFwJTIwZ2Vvc3BhdGlhbCUyMEluZGlhJTIwdGVjaG5vbG9neXxlbnwxfHx8fDE3NzA5MTg3NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080";
+  };
+
+  const getAfterImage = () => {
+    if (analysisResults?.images?.satellite_present) return `${API_URL}/api/images/${analysisResults.images.satellite_present}`;
+    return "https://images.unsplash.com/photo-1546833998-07256bcc76ad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkaWdpdGFsJTIwbWFwJTIwZ2Vvc3BhdGlhbCUyMEluZGlhJTIwdGVjaG5vbG9neXxlbnwxfHx8fDE3NzA5MTg3NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080";
+  };
+
+  const filteredChanges = changesData.filter((item: any) =>
+    (item.location || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (item.changeType || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleExport = () => {
+    if (!changesData.length) return;
+    const headers = ['Location', 'Change Type', 'Impact', 'Area Change', 'Confidence'];
+    const rows = changesData.map((c: any) => [
+      `"${c.location}"`, `"${c.changeType}"`, c.impact, c.areaChange, c.confidence
+    ]);
+    const csvContent = [headers.join(','), ...rows.map((r: any[]) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'change_detection_log.csv';
+    link.click();
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -21,7 +66,10 @@ export default function ChangeDetection() {
           <h2 className="text-2xl font-bold text-gray-900">Change Detection Analysis</h2>
           <p className="text-sm text-gray-600 mt-1">Temporal analysis of built-up area changes</p>
         </div>
-        <button className="px-4 py-2 bg-[#00C2A8] hover:bg-[#00A893] text-white rounded-lg font-medium transition-colors flex items-center gap-2">
+        <button
+          onClick={handleExport}
+          className="px-4 py-2 bg-[#00C2A8] hover:bg-[#00A893] text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+        >
           <Download className="w-4 h-4" />
           Export Change Summary
         </button>
@@ -32,59 +80,81 @@ export default function ChangeDetection() {
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-blue-50 rounded-lg">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
+              <Layers className="w-5 h-5 text-blue-600" />
             </div>
             <p className="text-sm text-gray-600">Total Changes</p>
           </div>
-          <p className="text-2xl font-bold text-gray-900">127</p>
-          <p className="text-xs text-gray-500 mt-1">plots affected</p>
+          <p className="text-2xl font-bold text-gray-900">{changesData.length}</p>
+          <p className="text-xs text-gray-500 mt-1">detected anomalies</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-green-50 rounded-lg">
               <TrendingUp className="w-5 h-5 text-green-600" />
             </div>
-            <p className="text-sm text-gray-600">Built-Up Increase</p>
+            <p className="text-sm text-gray-600">Growth Detected</p>
           </div>
-          <p className="text-2xl font-bold text-green-900">+12.3%</p>
-          <p className="text-xs text-gray-500 mt-1">average growth</p>
+          <p className="text-2xl font-bold text-green-900">
+            {changesData.filter((c: any) => (c.changeType || '').includes('Construction') || (c.changeType || '').includes('Increase')).length}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">new constructions</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-orange-50 rounded-lg">
               <AlertCircle className="w-5 h-5 text-orange-600" />
             </div>
-            <p className="text-sm text-gray-600">Significant Changes</p>
+            <p className="text-sm text-gray-600">High Impact</p>
           </div>
-          <p className="text-2xl font-bold text-orange-900">47</p>
+          <p className="text-2xl font-bold text-orange-900">
+            {changesData.filter((c: any) => c.impact === 'High').length}
+          </p>
           <p className="text-xs text-gray-500 mt-1">require review</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-purple-50 rounded-lg">
-              <ArrowLeftRight className="w-5 h-5 text-purple-600" />
+              <History className="w-5 h-5 text-purple-600" />
             </div>
-            <p className="text-sm text-gray-600">Analysis Period</p>
+            <p className="text-sm text-gray-600">Comparison Period</p>
           </div>
-          <p className="text-lg font-bold text-gray-900">T1 vs T2</p>
-          <p className="text-xs text-gray-500 mt-1">6 months interval</p>
+          <p className="text-lg font-bold text-gray-900">Past vs Present</p>
+          <p className="text-xs text-gray-500 mt-1">Satellite Imagery</p>
         </div>
       </div>
 
+      {/* AI Recommendations */}
+      {analysisResults?.dashboard_insights?.page_recommendations?.change_detection?.length > 0 && (
+        <div className="bg-teal-50 border border-teal-100 rounded-lg p-5">
+          <h3 className="text-sm font-bold text-teal-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></div>
+            AI Recommendations (Change Monitoring)
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {analysisResults.dashboard_insights.page_recommendations.change_detection.map((rec: string, idx: number) => (
+              <div key={idx} className="flex items-start gap-2 text-sm text-teal-900 bg-white/50 p-2 rounded">
+                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-teal-400 flex-shrink-0"></span>
+                {rec}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Before/After Comparison */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="font-bold text-gray-900 mb-4">Before/After Comparison</h3>
-        
-        <div className="relative bg-gray-100 rounded-lg overflow-hidden" style={{ width: '100%', height: '500px' }}>
+        <h3 className="font-bold text-gray-900 mb-4">Satellite Imagery Comparison</h3>
+
+        <div className="relative bg-gray-100 rounded-lg overflow-hidden select-none" style={{ width: '100%', height: '500px' }}>
           {/* T1 Image (Before) */}
           <div className="absolute inset-0">
             <ImageWithFallback
-              src="https://images.unsplash.com/photo-1546833998-07256bcc76ad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkaWdpdGFsJTIwbWFwJTIwZ2Vvc3BhdGlhbCUyMEluZGlhJTIwdGVjaG5vbG9neXxlbnwxfHx8fDE3NzA5MTg3NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080"
-              alt="T1 - Before"
+              src={getBeforeImage()}
+              alt="Past Satellite Imagery"
               className="w-full h-full object-cover"
             />
             <div className="absolute top-4 left-4 px-3 py-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-md">
-              <p className="text-sm font-semibold text-gray-900">T1 (Before) - Jan 2025</p>
+              <p className="text-sm font-semibold text-gray-900">Past (Satellite)</p>
             </div>
           </div>
 
@@ -94,12 +164,12 @@ export default function ChangeDetection() {
             style={{ clipPath: `inset(0 0 ${100 - sliderPosition}% 0)` }}
           >
             <ImageWithFallback
-              src="https://images.unsplash.com/photo-1546833998-07256bcc76ad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkaWdpdGFsJTIwbWFwJTIwZ2Vvc3BhdGlhbCUyMEluZGlhJTIwdGVjaG5vbG9neXxlbnwxfHx8fDE3NzA5MTg3NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080"
-              alt="T2 - After"
+              src={getAfterImage()}
+              alt="Present Satellite Imagery"
               className="w-full h-full object-cover brightness-110"
             />
             <div className="absolute top-4 right-4 px-3 py-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-md">
-              <p className="text-sm font-semibold text-gray-900">T2 (After) - Feb 2026</p>
+              <p className="text-sm font-semibold text-gray-900">Present (Satellite)</p>
             </div>
           </div>
 
@@ -130,7 +200,7 @@ export default function ChangeDetection() {
             onClick={() => setSliderPosition(0)}
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
           >
-            Show T1 Only
+            Show Past Only
           </button>
           <button
             onClick={() => setSliderPosition(50)}
@@ -142,92 +212,67 @@ export default function ChangeDetection() {
             onClick={() => setSliderPosition(100)}
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
           >
-            Show T2 Only
+            Show Present Only
           </button>
         </div>
       </div>
 
-      {/* Change Heatmap Legend */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="font-bold text-gray-900 mb-4">Change Magnitude Legend</h3>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">No Change</span>
-          <div className="flex-1 h-8 rounded bg-gradient-to-r from-green-200 via-yellow-300 via-orange-400 to-red-600"></div>
-          <span className="text-sm text-gray-600">High Change</span>
-        </div>
-        <div className="mt-4 grid grid-cols-4 gap-4 text-center text-sm">
-          <div>
-            <div className="w-full h-4 bg-green-200 rounded mb-1"></div>
-            <p className="text-xs text-gray-600">0-25%</p>
-          </div>
-          <div>
-            <div className="w-full h-4 bg-yellow-300 rounded mb-1"></div>
-            <p className="text-xs text-gray-600">25-50%</p>
-          </div>
-          <div>
-            <div className="w-full h-4 bg-orange-400 rounded mb-1"></div>
-            <p className="text-xs text-gray-600">50-75%</p>
-          </div>
-          <div>
-            <div className="w-full h-4 bg-red-600 rounded mb-1"></div>
-            <p className="text-xs text-gray-600">75-100%</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Significant Changes Table */}
+      {/* Changes List */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-200">
-          <h3 className="font-bold text-gray-900">Significant Changes Detected</h3>
-          <p className="text-sm text-gray-600 mt-1">Plots with major built-up area changes</p>
+        <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+          <div>
+            <h3 className="font-bold text-gray-900">Detailed Change Analysis</h3>
+            <p className="text-sm text-gray-600 mt-1">Detected changes in land use and structures</p>
+          </div>
+          {/* Simple Search */}
+          <div className="relative w-64">
+            <input
+              type="text"
+              placeholder="Search changes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-3 pr-8 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-teal-500"
+            />
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">Plot ID</th>
+                <th className="px-6 py-3 text-left font-semibold text-gray-700">Location</th>
                 <th className="px-6 py-3 text-left font-semibold text-gray-700">Change Type</th>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">T1 Area (m²)</th>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">T2 Area (m²)</th>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">Change %</th>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">Magnitude</th>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">Action</th>
+                <th className="px-6 py-3 text-left font-semibold text-gray-700">Area Change</th>
+                <th className="px-6 py-3 text-left font-semibold text-gray-700">Impact</th>
+                <th className="px-6 py-3 text-left font-semibold text-gray-700">Confidence</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {significantChanges.map((change, index) => (
-                <tr key={index} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-gray-900">{change.plotId}</td>
-                  <td className="px-6 py-4 text-gray-700">{change.changeType}</td>
-                  <td className="px-6 py-4 text-gray-700">{change.t1.toLocaleString()}</td>
-                  <td className="px-6 py-4 text-gray-700">{change.t2.toLocaleString()}</td>
-                  <td className="px-6 py-4">
-                    <span className="text-green-600 font-medium">
-                      +{(((change.t2 - change.t1) / change.t1) * 100).toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${
-                            change.magnitude >= 75
-                              ? 'bg-red-600'
-                              : change.magnitude >= 50
-                              ? 'bg-orange-400'
-                              : 'bg-yellow-300'
-                          }`}
-                          style={{ width: `${change.magnitude}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-xs font-medium">{change.magnitude}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <button className="text-teal-700 hover:text-teal-800 font-medium">View</button>
+              {filteredChanges.length > 0 ? (
+                filteredChanges.map((change: any, index: number) => (
+                  <tr key={index} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 font-medium text-gray-900 max-w-xs truncate" title={change.location}>{change.location}</td>
+                    <td className="px-6 py-4 text-gray-700">{change.changeType}</td>
+                    <td className="px-6 py-4 text-gray-700 font-medium">{change.areaChange || 'N/A'}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${change.impact === 'High' ? 'bg-red-100 text-red-700' :
+                        change.impact === 'Medium' ? 'bg-orange-100 text-orange-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                        {change.impact}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-gray-600">
+                      {change.confidence || 'High'}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                    No changes to display
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

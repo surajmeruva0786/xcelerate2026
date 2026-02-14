@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet } from 'react-router';
 import { DashboardSidebar } from '../../components/dashboard/DashboardSidebar';
 import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
+import { VerificationChain } from '../../components/dashboard/VerificationChain';
 
 export default function DashboardLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -17,8 +18,11 @@ export default function DashboardLayout() {
         <DashboardHeader />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto">
-          <Outlet />
+        <main className="flex-1 overflow-auto flex flex-col">
+          <div className="flex-1">
+            <Outlet />
+          </div>
+          <VerificationChain />
         </main>
       </div>
     </div>

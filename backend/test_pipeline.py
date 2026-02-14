@@ -31,6 +31,15 @@ try:
             print("\nGenerated Images:")
             for key, value in result.get('images', {}).items():
                 print(f"  - {key}: {value}")
+            
+            if result.get('dashboard_insights'):
+                print("\n✅ Dashboard Insights Generated!")
+                insights = result.get('dashboard_insights')
+                print(f"  - Executive Summary: {insights.get('executive_summary')[:100]}...")
+                print(f"  - Compliance: {insights.get('compliance_status')}")
+                print(f"  - Risk: {insights.get('risk_level')}")
+            else:
+                print("\n⚠ No Dashboard Insights found in response")
         else:
             print(f"\nâŒ PIPELINE FAILED: {result.get('error')}")
     else:

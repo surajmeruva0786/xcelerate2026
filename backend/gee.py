@@ -23,7 +23,9 @@ def initialize_ee():
 # Call init immediately but don't crash if fails (or maybe call it inside fetch functions)
 # initialize_ee()
 
-DOWNLOAD_DIR = "downloads"
+# gee.py is in backend/, so we go up one level
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 # ==========================================================
