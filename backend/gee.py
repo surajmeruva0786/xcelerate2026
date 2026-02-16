@@ -1,192 +1,135 @@
+﻿import ee
 import requests
 from datetime import datetime, timedelta
 import os
 import json
+from PIL import Image, ImageDraw, ImageFont
 
-# Try to import Earth Engine (optional - for historical satellite)
-try:
-    import ee
-    EE_AVAILABLE = True
-except ImportError:
-    EE_AVAILABLE = False
-    print("⚠️  Earth Engine not available. Historical satellite fetch will be skipped.")
+# ==========================================================
+# INITIALIZE EARTH ENGINE (Lazy Init)
+# ==========================================================
+EE_INITIALIZED = False
 
-DOWNLOAD_DIR = "downloads"
-
-# Initialize Earth Engine (requires authentication)
-def initialize_earth_engine():
-    """Initialize Google Earth Engine"""
-    try:
-        ee.Initialize()
-        return True
-    except:
+def initialize_ee():
+    global EE_INITIALIZED
+    if not EE_INITIALIZED:
         try:
-            ee.Authenticate()
-            ee.Initialize()
-            return True
+            ee.Initialize(project="csidc-hackathon-487309")
+            print("âœ“ Earth Engine initialized with project csidc-hackathon-487309")
+            EE_INITIALIZED = True
         except Exception as e:
-            print(f"Failed to initialize Earth Engine: {e}")
-            return False
+            print(f"âš  Earth Engine initialization failed: {e}")
 
-def fetch_historical_satellite_gee(latitude, longitude, area_name, years_ago=2):
-    """
-    Fetch historical satellite image from Google Earth Engine
-    """
-    if not EE_AVAILABLE:
-        print("⚠️  Earth Engine API not installed. Skipping historical satellite fetch.")
-        return None
-    
-    if not initialize_earth_engine():
-        return None
-    
+# Call init immediately but don't crash if fails (or maybe call it inside fetch functions)
+# initialize_ee()
+
+# gee.py is in backend/, so we go up one level
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+# ==========================================================
+# ADD LABEL TO IMAGE
+# ==========================================================
+def add_label_to_image(image_path, label_text):
+    """Add a text label to the image for verification"""
     try:
-        # Calculate date range (2 years ago)
-        end_date = datetime.now() - timedelta(days=365 * years_ago)
-        start_date = end_date - timedelta(days=30)  # Get 30-day window
+        img = Image.open(image_path)
+        draw = ImageDraw.Draw(img)
         
-        # Define point and region
+        # Try to use a font, fallback to default
+        try:
+            font = ImageFont.truetype("arial.ttf", 40)
+        except:
+            font = ImageFont.load_default()
+        
+        # Add white background rectangle for text
+        bbox = draw.textbbox((10, 10), label_text, font=font)
+        draw.rectangle(bbox, fill='white')
+        
+        # Add black text
+        draw.text((10, 10), label_text, fill='black', font=font)
+        
+        img.save(image_path)
+        print(f"  Added label: {label_text}")
+    except Exception as e:
+        print(f"  Could not add label: {e}")
+
+# ==========================================================
+# FETCH HISTORICAL SATELLITE (GEE)
+# ==========================================================
+def fetch_historical_satellite(latitude, longitude, area_name, years_ago=2):
+    try:
+        end_date = datetime.now() - timedelta(days=365 * years_ago)
+        start_date = end_date - timedelta(days=30)
+
         point = ee.Geometry.Point([longitude, latitude])
         region = point.buffer(2000).bounds()
-        
-        # Get Sentinel-2 imagery (available from 2015 onwards)
-        collection = ee.ImageCollection('COPERNICUS/S2_SR') \
-            .filterBounds(point) \
-            .filterDate(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')) \
-            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
+
+        print(f"  Searching imagery from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}...")
+        print(f"  Point: Lat={latitude}, Lon={longitude}")
+
+        collection = (
+            ee.ImageCollection('COPERNICUS/S2_SR')
+            .filterBounds(point)
+            .filterDate(start_date.strftime('%Y-%m-%d'),
+                        end_date.strftime('%Y-%m-%d'))
+            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
             .sort('system:time_start', False)
-        
-        # Get the most recent image in that time period
+        )
+
         image = collection.first()
-        
+
         if image is None:
-            print(f"No historical imagery found for {years_ago} years ago")
+            print(f"  No historical imagery found for {area_name}.")
             return None
-        
-        # Get image URL
+
         url = image.select(['B4', 'B3', 'B2']).getThumbURL({
             'region': region.getInfo(),
             'dimensions': 1024,
             'format': 'png',
             'min': 0,
-            'max': 3000
+            'max': 3000,
+            'gamma': 1.4
         })
-        
-        # Download the image
-        response = requests.get(url)
-        
+
+        response = requests.get(url, timeout=60)
+
         if response.status_code == 200:
             current_date = datetime.now().strftime("%Y-%m-%d")
             filename = f"satellite_{area_name}_{years_ago}years_ago_{current_date}.png"
             filepath = os.path.join(DOWNLOAD_DIR, filename)
-            
-            os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
             with open(filepath, 'wb') as f:
                 f.write(response.content)
-            
-            print(f"✓ Historical satellite image ({years_ago} years ago) saved: {filepath}")
+
+            # Add label with coordinates
+            label = f"{area_name} ({latitude:.4f}, {longitude:.4f}) - {years_ago}yr ago"
+            add_label_to_image(filepath, label)
+
+            print(f"  âœ“ Historical satellite saved: {filepath}")
             return filepath
         else:
-            print(f"✗ Failed to download historical image")
+            print(f"  âœ— Failed to download historical image for {area_name}")
             return None
-            
+
     except Exception as e:
-        print(f"Error fetching historical satellite: {e}")
+        print(f"  [ERROR] Fetch Historical Satellite Failed for {area_name}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
-def fetch_satellite_image_mapbox(latitude, longitude, area_name, label="current"):
-    """
-    Fetch current satellite image using Mapbox Static API
-    """
-    try:
-        access_token = "pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw"
-        
-        base_url = f"https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static"
-        
-        zoom = 15
-        width = 1280
-        height = 1280
-        
-        url = f"{base_url}/{longitude},{latitude},{zoom}/{width}x{height}"
-        
-        params = {
-            'access_token': access_token
-        }
-        
-        print(f"Fetching Mapbox satellite image ({label}) for coordinates: {latitude}, {longitude}")
-        
-        response = requests.get(url, params=params)
-        
-        if response.status_code == 200:
-            current_date = datetime.now().strftime("%Y-%m-%d")
-            filename = f"satellite_{area_name}_{label}_{current_date}.png"
-            filepath = os.path.join(DOWNLOAD_DIR, filename)
-            
-            os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-            with open(filepath, 'wb') as f:
-                f.write(response.content)
-            
-            print(f"✓ Satellite image ({label}) saved: {filepath}")
-            return filepath
-        else:
-            print(f"✗ Failed to download satellite image. Status code: {response.status_code}")
-            return None
-            
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
 
-def fetch_osm_image_mapbox(latitude, longitude, area_name, label="current"):
-    """
-    Fetch OSM (OpenStreetMap) layer image using Mapbox
-    """
-    try:
-        access_token = "pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw"
-        
-        base_url = f"https://api.mapbox.com/styles/v1/mapbox/streets-v11/static"
-        
-        zoom = 15
-        width = 1280
-        height = 1280
-        
-        url = f"{base_url}/{longitude},{latitude},{zoom}/{width}x{height}"
-        
-        params = {
-            'access_token': access_token
-        }
-        
-        print(f"Fetching OSM layer image ({label}) for coordinates: {latitude}, {longitude}")
-        
-        response = requests.get(url, params=params)
-        
-        if response.status_code == 200:
-            current_date = datetime.now().strftime("%Y-%m-%d")
-            filename = f"osm_{area_name}_{label}_{current_date}.png"
-            filepath = os.path.join(DOWNLOAD_DIR, filename)
-            
-            os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-            with open(filepath, 'wb') as f:
-                f.write(response.content)
-            
-            print(f"✓ OSM image ({label}) saved: {filepath}")
-            return filepath
-        else:
-            print(f"✗ Failed to download OSM image. Status code: {response.status_code}")
-            return None
-            
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
-
-def fetch_satellite_image_esri(latitude, longitude, area_name, label="current"):
-    """
-    Fetch current satellite image using ESRI ArcGIS
-    """
+# ==========================================================
+# FETCH CURRENT SATELLITE (ESRI)
+# ==========================================================
+def fetch_current_satellite(latitude, longitude, area_name):
     try:
         base_url = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export"
-        
+
         offset = 0.01
         bbox = f"{longitude-offset},{latitude-offset},{longitude+offset},{latitude+offset}"
-        
+
         params = {
             'bbox': bbox,
             'bboxSR': 4326,
@@ -195,41 +138,46 @@ def fetch_satellite_image_esri(latitude, longitude, area_name, label="current"):
             'format': 'png',
             'f': 'image'
         }
-        
-        print(f"Fetching ESRI satellite image ({label}) for coordinates: {latitude}, {longitude}")
-        
-        response = requests.get(base_url, params=params)
-        
+
+        print(f"  Fetching current satellite...")
+        print(f"  BBox: {bbox}")
+        response = requests.get(base_url, params=params, timeout=30)
+
         if response.status_code == 200:
             current_date = datetime.now().strftime("%Y-%m-%d")
-            filename = f"satellite_{area_name}_{label}_{current_date}.png"
+            filename = f"satellite_{area_name}_current_{current_date}.png"
             filepath = os.path.join(DOWNLOAD_DIR, filename)
-            
-            os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
             with open(filepath, 'wb') as f:
                 f.write(response.content)
-            
-            print(f"✓ Satellite image ({label}) saved: {filepath}")
+
+            # Add label with coordinates
+            label = f"{area_name} ({latitude:.4f}, {longitude:.4f}) - Current"
+            add_label_to_image(filepath, label)
+
+            print(f"  âœ“ Current satellite saved: {filepath}")
             return filepath
         else:
-            print(f"✗ Failed to download satellite image. Status code: {response.status_code}")
+            print(f"  âœ— Failed to download satellite image for {area_name}")
             return None
-            
+
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"  [ERROR] Fetch Current Satellite Failed for {area_name}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
-def fetch_osm_image_esri(latitude, longitude, area_name, label="current"):
-    """
-    Fetch OSM layer image using ESRI ArcGIS OpenStreetMap
-    Note: OSM doesn't have historical data in these free APIs
-    """
+
+# ==========================================================
+# FETCH CURRENT OSM (ESRI)
+# ==========================================================
+def fetch_current_osm(latitude, longitude, area_name):
     try:
         base_url = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/export"
-        
+
         offset = 0.01
         bbox = f"{longitude-offset},{latitude-offset},{longitude+offset},{latitude+offset}"
-        
+
         params = {
             'bbox': bbox,
             'bboxSR': 4326,
@@ -238,178 +186,131 @@ def fetch_osm_image_esri(latitude, longitude, area_name, label="current"):
             'format': 'png',
             'f': 'image'
         }
-        
-        print(f"Fetching ESRI OSM layer image ({label}) for coordinates: {latitude}, {longitude}")
-        
-        response = requests.get(base_url, params=params)
-        
+
+        print(f"  Fetching current OSM...")
+        response = requests.get(base_url, params=params, timeout=30)
+
         if response.status_code == 200:
             current_date = datetime.now().strftime("%Y-%m-%d")
-            filename = f"osm_{area_name}_{label}_{current_date}.png"
+            filename = f"osm_{area_name}_current_{current_date}.png"
             filepath = os.path.join(DOWNLOAD_DIR, filename)
-            
-            os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
             with open(filepath, 'wb') as f:
                 f.write(response.content)
-            
-            print(f"✓ OSM image ({label}) saved: {filepath}")
+
+            # Add label with coordinates
+            label = f"{area_name} ({latitude:.4f}, {longitude:.4f}) - OSM"
+            add_label_to_image(filepath, label)
+
+            print(f"  âœ“ Current OSM saved: {filepath}")
             return filepath
         else:
-            print(f"✗ Failed to download OSM image. Status code: {response.status_code}")
+            print(f"  âœ— Failed to download OSM image for {area_name}")
             return None
-            
+
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"  [ERROR] Fetch Current OSM Failed for {area_name}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
-def parse_coordinates(location_string):
-    """
-    Parse coordinates from location string like '22.017307°N, 82.479004°E'
-    Returns (latitude, longitude) as floats
-    """
-    import re
-    
-    if not location_string or location_string == "Not found":
-        return None, None
-    
-    pattern = r'(\d+\.?\d*)°?([NS]),?\s*(\d+\.?\d*)°?([EW])'
-    match = re.search(pattern, location_string, re.IGNORECASE)
-    
-    if match:
-        lat = float(match.group(1))
-        lat_dir = match.group(2).upper()
-        lon = float(match.group(3))
-        lon_dir = match.group(4).upper()
-        
-        if lat_dir == 'S':
-            lat = -lat
-        if lon_dir == 'W':
-            lon = -lon
-            
-        return lat, lon
-    
-    return None, None
 
-def main(json_path=None):
+# ==========================================================
+# VERIFY COORDINATES
+# ==========================================================
+from math import radians, cos, sin, asin, sqrt
+
+def haversine(lon1, lat1, lon2, lat2):
+    """Calculate distance in km"""
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+    km = 6371 * c
+    return km
+
+
+
+# ==========================================================
+# MAIN EXECUTION API
+# ==========================================================
+def main(json_path):
     """
-    Main function to fetch current and historical satellite/OSM images.
-    
-    Args:
-        json_path (str): Path to JSON file containing area name and coordinates
-    
-    Returns:
-        dict: Result containing status and paths to generated images
+    Main entry point called by app.py.
     """
-    result = {
-        "status": "error",
-        "current_satellite": None,
-        "current_osm": None,
-        "historical_satellite_2years": None,
-        "error": None
-    }
+    print(f"GEE: Starting processing for {json_path}")
     
-    # Read from JSON if provided
-    if json_path:
-        try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+    # Ensure initialized
+    initialize_ee()
+    
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
             
-            area_name = data.get("area_name", "Unknown")
-            location = data.get("location", "")
+        area_name = data.get('area_name', 'Unknown')
+        location_str = data.get('location', '')
+        
+        # Parse location "22.0173Â°N, 82.4790Â°E" or similar
+        # script.py output: "22.0173Â°N, 82.4790Â°E"
+        # We need to parse this.
+        import re
+        # Pattern: digits optionally decimal, optional degree, optional space, N/S, etc.
+        # But script.py might output clean string or raw?
+        # script.py: f"{match[0]}Â°{match[1]}, {match[2]}Â°{match[3]}" -> "22.0173Â°N, 82.4790Â°E"
+        
+        # Simple parser
+        lat = 0.0
+        lon = 0.0
+        
+        # Remove deg symbol and whitespace
+        clean_loc = location_str.replace('Â°', '').replace(',', ' ').strip()
+        parts = clean_loc.split() 
+        # e.g. ["22.0173N", "82.4790E"] or ["22.0173", "N", "82.4790", "E"]
+        
+        # Extract numbers using regex
+        nums = re.findall(r"[-+]?\d*\.\d+|\d+", location_str)
+        if len(nums) >= 2:
+            lat = float(nums[0])
+            lon = float(nums[1])
+        else:
+            # Fallback for known areas if parsing fails
+            if "Kapan" in area_name:
+                lat, lon = 22.017307, 82.479004
+            elif "Gondwara" in area_name:
+                lat, lon = 21.290583, 81.614885
+            else:
+                 return {"status": "error", "error": "Could not parse coordinates"}
+
+        print(f"  Parsed Coordinates: {lat}, {lon}")
+        
+        # Fetch images
+        current_sat = fetch_current_satellite(lat, lon, area_name)
+        current_osm = fetch_current_osm(lat, lon, area_name)
+        historical_sat = fetch_historical_satellite(lat, lon, area_name, 2)
+        
+        result = {
+            "status": "success",
+            "current_satellite": current_sat,
+            "current_osm": current_osm,
+            "historical_satellite": historical_sat,
             
-            latitude, longitude = parse_coordinates(location)
-            
-            if latitude is None or longitude is None:
-                result["error"] = "Could not parse coordinates from JSON"
-                print(f"✗ Error: {result['error']}")
-                return result
-                
-        except Exception as e:
-            result["error"] = f"Failed to read JSON: {str(e)}"
-            print(f"✗ Error: {result['error']}")
-            return result
-    else:
-        # Default coordinates for testing
-        latitude = 22.017307
-        longitude = 82.479004
-        area_name = "Kapan"
-    
-    print("="*70)
-    print("Fetching Current and Historical Satellite and OSM Layer Images")
-    print("="*70 + "\n")
-    
-    # 1. Fetch CURRENT Satellite Image
-    print("1. Fetching CURRENT Satellite Image...")
-    print("-"*70)
-    current_satellite = fetch_satellite_image_esri(latitude, longitude, area_name, "current")
-    
-    if not current_satellite:
-        print("   ESRI failed, trying Mapbox...")
-        current_satellite = fetch_satellite_image_mapbox(latitude, longitude, area_name, "current")
-    
-    result["current_satellite"] = current_satellite
-    print()
-    
-    # 2. Fetch CURRENT OSM Layer Image
-    print("2. Fetching CURRENT OSM Layer Image...")
-    print("-"*70)
-    current_osm = fetch_osm_image_esri(latitude, longitude, area_name, "current")
-    
-    if not current_osm:
-        print("   ESRI failed, trying Mapbox...")
-        current_osm = fetch_osm_image_mapbox(latitude, longitude, area_name, "current")
-    
-    result["current_osm"] = current_osm
-    print()
-    
-    # 3. Fetch HISTORICAL Satellite Image (2 years ago) - Google Earth Engine
-    print("3. Fetching HISTORICAL Satellite Image (2 years ago)...")
-    print("-"*70)
-    print("Note: This requires Google Earth Engine (free but needs authentication)")
-    
-    historical_satellite = fetch_historical_satellite_gee(latitude, longitude, area_name, years_ago=2)
-    result["historical_satellite_2years"] = historical_satellite
-    
-    if not historical_satellite:
-        print("⚠ Historical satellite imagery not available via Google Earth Engine")
-        print("  To enable: pip install earthengine-api && earthengine authenticate")
-    
-    print()
-    
-    # 4. Note about historical OSM
-    print("4. Historical OSM Layer...")
-    print("-"*70)
-    print("⚠ Historical OSM data is NOT available through free APIs")
-    print("  OSM only provides current street map data")
-    print()
-    
-    # Summary
-    print("="*70)
-    print("Summary:")
-    print("="*70)
-    print(f"Current Satellite:     {'✓ Success' if current_satellite else '✗ Failed'}")
-    print(f"Current OSM:           {'✓ Success' if current_osm else '✗ Failed'}")
-    print(f"Historical Satellite:  {'✓ Success' if historical_satellite else '✗ Not Available'}")
-    print(f"Historical OSM:        ✗ Not Available (no free API)")
-    print("="*70)
-    
-    if current_satellite and current_osm:
-        result["status"] = "partial_success" if not historical_satellite else "success"
-    
-    return result
+            # Legacy/Fallback keys for app.py just in case
+            "satellite_image": current_sat,
+            "osm_image": current_osm,
+            "historical_satellite_2years": historical_sat
+        }
+        return result
+        
+    except Exception as e:
+        print(f"GEE Main Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "error": str(e)}
 
 if __name__ == "__main__":
-    import sys
-    
-    print("\n⚠️  IMPORTANT NOTES:")
-    print("="*70)
-    print("1. Historical satellite requires Google Earth Engine")
-    print("   Install: pip install earthengine-api")
-    print("   Authenticate: earthengine authenticate")
-    print("2. Historical OSM is NOT available through free APIs")
-    print("3. Only current OSM data will be downloaded")
-    print("="*70 + "\n")
-    
-    json_file = sys.argv[1] if len(sys.argv) > 1 else None
-    result = main(json_file)
-    print("\n" + json.dumps(result, indent=2))
+    # Test run
+    # Mock data or run for Kapan
+    print("Running in standalone mode...")
+    initialize_ee()
+    # fetch_current_satellite(22.017307, 82.479004, "Kapan_Test")

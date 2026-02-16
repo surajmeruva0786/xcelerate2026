@@ -1,83 +1,42 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Filter, Download, Eye, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
-
-const plotsData = [
-  {
-    plotId: 'IND-1234',
-    industryName: 'Steel Manufacturing Ltd.',
-    approvedArea: 5000,
-    builtUpArea: 4200,
-    vacantPercent: 16,
-    encroachmentArea: 150,
-    riskScore: 78,
-    riskLevel: 'High',
-    verificationStatus: 'Pending',
-  },
-  {
-    plotId: 'IND-5678',
-    industryName: 'Textile Industries Pvt. Ltd.',
-    approvedArea: 3500,
-    builtUpArea: 2800,
-    vacantPercent: 20,
-    encroachmentArea: 0,
-    riskScore: 45,
-    riskLevel: 'Medium',
-    verificationStatus: 'Verified',
-  },
-  {
-    plotId: 'IND-9012',
-    industryName: 'Chemical Processing Co.',
-    approvedArea: 4200,
-    builtUpArea: 3900,
-    vacantPercent: 7,
-    encroachmentArea: 80,
-    riskScore: 62,
-    riskLevel: 'Medium',
-    verificationStatus: 'Under Review',
-  },
-  {
-    plotId: 'IND-3456',
-    industryName: 'Automotive Parts Manufacturing',
-    approvedArea: 6000,
-    builtUpArea: 1200,
-    vacantPercent: 80,
-    encroachmentArea: 0,
-    riskScore: 35,
-    riskLevel: 'Low',
-    verificationStatus: 'Verified',
-  },
-  {
-    plotId: 'IND-7890',
-    industryName: 'Electronics Assembly Unit',
-    approvedArea: 2500,
-    builtUpArea: 2650,
-    vacantPercent: 0,
-    encroachmentArea: 150,
-    riskScore: 85,
-    riskLevel: 'High',
-    verificationStatus: 'Pending',
-  },
-];
 
 export default function PlotCompliance() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRisk, setFilterRisk] = useState('All');
+  const [analysisResults, setAnalysisResults] = useState<any>(null);
 
-  const filteredPlots = plotsData.filter((plot) => {
+  useEffect(() => {
+    const stored = localStorage.getItem('analysisResults');
+    if (stored) {
+      setAnalysisResults(JSON.parse(stored));
+    }
+
+    const handleAnalysisComplete = (event: any) => {
+      setAnalysisResults(event.detail);
+    };
+
+    window.addEventListener('analysisComplete', handleAnalysisComplete);
+    return () => window.removeEventListener('analysisComplete', handleAnalysisComplete);
+  }, []);
+
+  const plotsData = analysisResults?.dashboard_insights?.plot_compliance || [];
+
+  const filteredPlots = plotsData.filter((plot: any) => {
     const matchesSearch =
-      plot.plotId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      plot.industryName.toLowerCase().includes(searchQuery.toLowerCase());
+      (plot.plotId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (plot.industryName || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRisk = filterRisk === 'All' || plot.riskLevel === filterRisk;
     return matchesSearch && matchesRisk;
   });
 
   const getRiskBadge = (level: string) => {
-    const colors = {
+    const colors: any = {
       High: 'bg-red-50 text-red-700 border-red-200',
       Medium: 'bg-orange-50 text-orange-700 border-orange-200',
       Low: 'bg-green-50 text-green-700 border-green-200',
     };
-    return colors[level as keyof typeof colors];
+    return colors[level] || 'bg-gray-50 text-gray-700 border-gray-200';
   };
 
   const getStatusIcon = (status: string) => {
@@ -93,6 +52,40 @@ export default function PlotCompliance() {
     }
   };
 
+  // Stats
+  const totalPlots = plotsData.length;
+  const highRisk = plotsData.filter((p: any) => p.riskLevel === 'High').length;
+  const mediumRisk = plotsData.filter((p: any) => p.riskLevel === 'Medium').length;
+  const lowRisk = plotsData.filter((p: any) => p.riskLevel === 'Low').length;
+  const pending = plotsData.filter((p: any) => p.verificationStatus === 'Pending').length;
+
+  const handleExport = () => {
+    if (!plotsData.length) return;
+
+    const headers = ['Plot ID', 'Industry Name', 'Approved Area', 'Built-Up Area', 'Vacant %', 'Encroachment Area', 'Risk Score', 'Risk Level', 'Status'];
+    const rows = plotsData.map((plot: any) => [
+      plot.plotId,
+      `"${plot.industryName}"`,
+      plot.approvedArea,
+      plot.builtUpArea,
+      plot.vacantPercent,
+      plot.encroachmentArea,
+      plot.riskScore,
+      plot.riskLevel,
+      plot.verificationStatus
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((r: any[]) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `plot_compliance_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -101,7 +94,10 @@ export default function PlotCompliance() {
           <h2 className="text-2xl font-bold text-gray-900">Plot Compliance</h2>
           <p className="text-sm text-gray-600 mt-1">Monitor individual plot compliance status</p>
         </div>
-        <button className="px-4 py-2 bg-[#00C2A8] hover:bg-[#00A893] text-white rounded-lg font-medium transition-colors flex items-center gap-2">
+        <button
+          onClick={handleExport}
+          className="px-4 py-2 bg-[#00C2A8] hover:bg-[#00A893] text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+        >
           <Download className="w-4 h-4" />
           Export CSV
         </button>
@@ -111,25 +107,43 @@ export default function PlotCompliance() {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-xs text-gray-600 mb-1">Total Plots</p>
-          <p className="text-2xl font-bold text-gray-900">1,247</p>
+          <p className="text-2xl font-bold text-gray-900">{totalPlots}</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-xs text-gray-600 mb-1">High Risk</p>
-          <p className="text-2xl font-bold text-red-600">23</p>
+          <p className="text-2xl font-bold text-red-600">{highRisk}</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-xs text-gray-600 mb-1">Medium Risk</p>
-          <p className="text-2xl font-bold text-orange-600">348</p>
+          <p className="text-2xl font-bold text-orange-600">{mediumRisk}</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-xs text-gray-600 mb-1">Low Risk</p>
-          <p className="text-2xl font-bold text-green-600">876</p>
+          <p className="text-2xl font-bold text-green-600">{lowRisk}</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-xs text-gray-600 mb-1">Pending Verification</p>
-          <p className="text-2xl font-bold text-blue-600">47</p>
+          <p className="text-2xl font-bold text-blue-600">{pending}</p>
         </div>
       </div>
+
+      {/* AI Recommendations */}
+      {analysisResults?.dashboard_insights?.page_recommendations?.plot_compliance?.length > 0 && (
+        <div className="bg-teal-50 border border-teal-100 rounded-lg p-4">
+          <h3 className="text-sm font-bold text-teal-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></div>
+            AI Recommendations (Action Required)
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {analysisResults.dashboard_insights.page_recommendations.plot_compliance.map((rec: string, idx: number) => (
+              <div key={idx} className="flex items-start gap-2 text-sm text-teal-900 bg-white/50 p-2 rounded">
+                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-teal-400 flex-shrink-0"></span>
+                {rec}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -144,7 +158,7 @@ export default function PlotCompliance() {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-600 focus:border-transparent outline-none"
             />
           </div>
-          
+
           <select
             value={filterRisk}
             onChange={(e) => setFilterRisk(e.target.value)}
@@ -182,75 +196,82 @@ export default function PlotCompliance() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredPlots.map((plot, index) => (
-                <tr key={index} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900">{plot.plotId}</td>
-                  <td className="px-4 py-3 text-gray-700 max-w-xs truncate">{plot.industryName}</td>
-                  <td className="px-4 py-3 text-gray-700">{plot.approvedArea.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-gray-700">{plot.builtUpArea.toLocaleString()}</td>
-                  <td className="px-4 py-3">
-                    <span className={`${plot.vacantPercent > 50 ? 'text-orange-600' : 'text-gray-700'}`}>
-                      {plot.vacantPercent}%
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`${plot.encroachmentArea > 0 ? 'text-red-600 font-medium' : 'text-gray-700'}`}>
-                      {plot.encroachmentArea}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${
-                            plot.riskScore >= 70
+              {filteredPlots.length > 0 ? (
+                filteredPlots.map((plot: any, index: number) => (
+                  <tr key={index} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-900">{plot.plotId}</td>
+                    <td className="px-4 py-3 text-gray-700 max-w-xs truncate">{plot.industryName}</td>
+                    <td className="px-4 py-3 text-gray-700">{plot.approvedArea?.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-gray-700">{plot.builtUpArea?.toLocaleString()}</td>
+                    <td className="px-4 py-3">
+                      <span className={`${plot.vacantPercent > 50 ? 'text-orange-600' : 'text-gray-700'}`}>
+                        {plot.vacantPercent}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`${plot.encroachmentArea > 0 ? 'text-red-600 font-medium' : 'text-gray-700'}`}>
+                        {plot.encroachmentArea}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 bg-gray-200 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full ${plot.riskScore >= 70
                               ? 'bg-red-500'
                               : plot.riskScore >= 50
-                              ? 'bg-orange-500'
-                              : 'bg-green-500'
-                          }`}
-                          style={{ width: `${plot.riskScore}%` }}
-                        ></div>
+                                ? 'bg-orange-500'
+                                : 'bg-green-500'
+                              }`}
+                            style={{ width: `${plot.riskScore}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-xs font-medium">{plot.riskScore}</span>
                       </div>
-                      <span className="text-xs font-medium">{plot.riskScore}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded border text-xs font-medium ${getRiskBadge(plot.riskLevel)}`}>
-                      {plot.riskLevel}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      {getStatusIcon(plot.verificationStatus)}
-                      <span className="text-xs">{plot.verificationStatus}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button className="flex items-center gap-1 px-3 py-1 text-teal-700 hover:bg-teal-50 rounded transition-colors font-medium">
-                      <Eye className="w-4 h-4" />
-                      View
-                    </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 rounded border text-xs font-medium ${getRiskBadge(plot.riskLevel)}`}>
+                        {plot.riskLevel}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(plot.verificationStatus)}
+                        <span className="text-xs">{plot.verificationStatus}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button className="flex items-center gap-1 px-3 py-1 text-teal-700 hover:bg-teal-50 rounded transition-colors font-medium">
+                        <Eye className="w-4 h-4" />
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={10} className="px-6 py-8 text-center text-gray-500">
+                    No plot data available.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            Showing {filteredPlots.length} of {plotsData.length} plots
-          </p>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-sm">Previous</button>
-            <button className="px-3 py-1 bg-teal-700 text-white rounded text-sm">1</button>
-            <button className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-sm">2</button>
-            <button className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-sm">3</button>
-            <button className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-sm">Next</button>
+        {filteredPlots.length > 0 && (
+          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              Showing {filteredPlots.length} of {plotsData.length} plots
+            </p>
+            <div className="flex items-center gap-2">
+              <button disabled className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-sm disabled:opacity-50">Previous</button>
+              <button className="px-3 py-1 bg-teal-700 text-white rounded text-sm">1</button>
+              <button disabled className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-sm disabled:opacity-50">Next</button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

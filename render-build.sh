@@ -2,11 +2,12 @@
 # Exit on error
 set -o errexit
 
-# Navigate to backend directory
-cd backend
+echo "Current directory: $(pwd)"
+echo "Listing files:"
+ls -la
 
-# Install Python dependencies
-pip install -r requirements.txt
+# Install Python dependencies from backend directory
+pip install -r backend/requirements.txt
 
 # Install system dependencies for Playwright
 playwright install-deps chromium

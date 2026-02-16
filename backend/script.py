@@ -1,11 +1,14 @@
-import asyncio
+﻿import asyncio
 import os
 import re
 import json
 from datetime import datetime
 from playwright.async_api import async_playwright
 
-DOWNLOAD_DIR = "downloads"
+# Define absolute path for downloads directory (pointing to project_root/downloads)
+# script.py is in backend/, so we go up one level
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 
 async def run(area_name):
     """
@@ -92,7 +95,7 @@ async def run(area_name):
                 
                 await download.save_as(file_path)
                 result["image_path"] = file_path
-                print(f"✓ Downloaded: {file_path}")
+                print(f"âœ“ Downloaded: {file_path}")
                 
             except Exception as e:
                 print(f"Download error: {e}")
@@ -183,12 +186,12 @@ async def run(area_name):
                             
                             combined_text = f"{location_text} {parent_text} {sibling_text}"
                             
-                            coord_pattern = r'(\d+\.?\d*)\s*[°]?\s*([NS])\s*,?\s*(\d+\.?\d*)\s*[°]?\s*([EW])'
+                            coord_pattern = r'(\d+\.?\d*)\s*[Â°]?\s*([NS])\s*,?\s*(\d+\.?\d*)\s*[Â°]?\s*([EW])'
                             matches = re.findall(coord_pattern, combined_text, re.IGNORECASE)
                             
                             if matches:
                                 match = matches[0]
-                                extracted_coordinates = f"{match[0]}°{match[1]}, {match[2]}°{match[3]}"
+                                extracted_coordinates = f"{match[0]}Â°{match[1]}, {match[2]}Â°{match[3]}"
                                 coordinates_found = True
                                 break
                                 
@@ -199,12 +202,12 @@ async def run(area_name):
                     try:
                         body_text = await frame.locator('body').text_content()
                         
-                        coord_pattern = r'(\d+\.?\d*)\s*[°]?\s*([NS])\s*,?\s*(\d+\.?\d*)\s*[°]?\s*([EW])'
+                        coord_pattern = r'(\d+\.?\d*)\s*[Â°]?\s*([NS])\s*,?\s*(\d+\.?\d*)\s*[Â°]?\s*([EW])'
                         matches = re.findall(coord_pattern, body_text, re.IGNORECASE)
                         
                         if matches:
                             match = matches[0]
-                            extracted_coordinates = f"{match[0]}°{match[1]}, {match[2]}°{match[3]}"
+                            extracted_coordinates = f"{match[0]}Â°{match[1]}, {match[2]}Â°{match[3]}"
                     except Exception as e:
                         print(f"Error searching body for coordinates: {e}")
                         
@@ -228,7 +231,7 @@ async def run(area_name):
                 
                 result["json_path"] = json_path
                 result["status"] = "success"
-                print(f"✓ JSON saved: {json_path}")
+                print(f"âœ“ JSON saved: {json_path}")
                 
             except Exception as e:
                 print(f"Error saving JSON: {e}")

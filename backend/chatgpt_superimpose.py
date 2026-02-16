@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import os
 from datetime import datetime
 from playwright.async_api import async_playwright
@@ -39,7 +39,7 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
         # Detect if running in production
         is_production = os.environ.get('RENDER') or os.environ.get('FLASK_ENV') == 'production'
         
-        print(f"🌐 Browser mode: {'Headless' if is_production else 'Visible'}")
+        print(f"ðŸŒ Browser mode: {'Headless' if is_production else 'Visible'}")
         
         browser = await p.chromium.launch(headless=bool(is_production), slow_mo=500)
         context = await browser.new_context(accept_downloads=True)
@@ -57,20 +57,20 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
             try:
                 accept_cookies = page.locator("button:has-text('Accept all'), button:has-text('Accept'), button:has-text('Allow all')").first
                 if await accept_cookies.is_visible(timeout=5000):
-                    print("  → Clicking 'Accept all cookies'")
+                    print("  â†’ Clicking 'Accept all cookies'")
                     await accept_cookies.click()
                     await page.wait_for_timeout(1000)
                 else:
-                    print("  → No cookie banner found")
+                    print("  â†’ No cookie banner found")
             except:
-                print("  → No cookie banner found (or already accepted)")
+                print("  â†’ No cookie banner found (or already accepted)")
             
             # STEP 3: Click login button at top right
             print("[STEP 3] Clicking login button at top right...")
             login_button = page.locator("button:has-text('Log in'), a:has-text('Log in')").first
             await login_button.wait_for(state="visible", timeout=10000)
             await login_button.click()
-            print("  → Login button clicked")
+            print("  â†’ Login button clicked")
             await page.wait_for_timeout(2000)
             
             # STEP 4: Click "Continue with Google"
@@ -78,11 +78,11 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
             google_button = page.locator("button:has-text('Continue with Google'), button:has-text('Google')").first
             await google_button.wait_for(state="visible", timeout=10000)
             await google_button.click()
-            print("  → 'Continue with Google' clicked")
+            print("  â†’ 'Continue with Google' clicked")
             await page.wait_for_timeout(5000)  # Increased wait time
             
             # Check for CAPTCHA / "Verify you're human"
-            print("  → Checking for CAPTCHA...")
+            print("  â†’ Checking for CAPTCHA...")
             try:
                 # Look for reCAPTCHA iframe
                 recaptcha_frame = page.frame_locator("iframe[src*='recaptcha'], iframe[title*='reCAPTCHA']").first
@@ -92,14 +92,14 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
                     captcha_checkbox = recaptcha_frame.locator("div.recaptcha-checkbox-border, #recaptcha-anchor").first
                     
                     if await captcha_checkbox.is_visible(timeout=3000):
-                        print("\n⚠️  CAPTCHA DETECTED!")
-                        print("━" * 60)
+                        print("\nâš ï¸  CAPTCHA DETECTED!")
+                        print("â”" * 60)
                         print("  Attempting to tick the 'I'm not a robot' checkbox...")
-                        print("━" * 60)
+                        print("â”" * 60)
                         
                         # Click the checkbox
                         await captcha_checkbox.click()
-                        print("  ✓ Checkbox clicked!")
+                        print("  âœ“ Checkbox clicked!")
                         
                         # Wait for potential image challenge
                         await page.wait_for_timeout(3000)
@@ -107,31 +107,31 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
                         # Check if image challenge appeared
                         image_challenge = page.locator("iframe[title*='challenge'], iframe[src*='bframe']").first
                         if await image_challenge.is_visible(timeout=2000):
-                            print("\n⚠️  IMAGE CHALLENGE DETECTED!")
-                            print("━" * 60)
+                            print("\nâš ï¸  IMAGE CHALLENGE DETECTED!")
+                            print("â”" * 60)
                             print("  Please complete the image challenge:")
-                            print("  ✓ Select the correct images")
-                            print("  ✓ Click 'Verify'")
-                            print("  ✓ Waiting 45 seconds for completion...")
-                            print("━" * 60)
+                            print("  âœ“ Select the correct images")
+                            print("  âœ“ Click 'Verify'")
+                            print("  âœ“ Waiting 45 seconds for completion...")
+                            print("â”" * 60)
                             await page.wait_for_timeout(45000)
                         else:
-                            print("  → No image challenge, continuing...")
+                            print("  â†’ No image challenge, continuing...")
                             await page.wait_for_timeout(3000)
                 except:
                     # Maybe it's not in an iframe, try direct checkbox
                     direct_checkbox = page.locator("input[type='checkbox'], div.recaptcha-checkbox").first
                     if await direct_checkbox.is_visible(timeout=2000):
-                        print("\n⚠️  CAPTCHA DETECTED (direct)!")
-                        print("  → Clicking checkbox...")
+                        print("\nâš ï¸  CAPTCHA DETECTED (direct)!")
+                        print("  â†’ Clicking checkbox...")
                         await direct_checkbox.click()
-                        print("  ✓ Checkbox clicked!")
+                        print("  âœ“ Checkbox clicked!")
                         await page.wait_for_timeout(5000)
                     else:
-                        print("  → No CAPTCHA checkbox found")
+                        print("  â†’ No CAPTCHA checkbox found")
                         
             except Exception as e:
-                print(f"  → No CAPTCHA detected (or error: {str(e)[:50]}...)")
+                print(f"  â†’ No CAPTCHA detected (or error: {str(e)[:50]}...)")
 
             
             # STEP 5: Enter Gmail
@@ -146,12 +146,12 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
             try:
                 await email_input.wait_for(state="visible", timeout=15000)
             except:
-                print("\n⚠️  Could not find email input automatically")
-                print("━" * 60)
+                print("\nâš ï¸  Could not find email input automatically")
+                print("â”" * 60)
                 print("  The Google login page may need manual intervention.")
                 print("  Please enter your email manually if needed.")
                 print("  Waiting 20 seconds...")
-                print("━" * 60)
+                print("â”" * 60)
                 await page.wait_for_timeout(20000)
                 
                 # Try again
@@ -161,13 +161,13 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
                     raise Exception("Email input field not found after waiting")
             
             await email_input.fill(email)
-            print("  → Email entered")
+            print("  â†’ Email entered")
             await page.wait_for_timeout(1000)
             
             # Click Next
             next_button = page.locator("button:has-text('Next'), #identifierNext").first
             await next_button.click()
-            print("  → Clicked 'Next'")
+            print("  â†’ Clicked 'Next'")
             await page.wait_for_timeout(3000)
             
             # STEP 6: Enter Password
@@ -179,11 +179,11 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
             try:
                 await password_input.wait_for(state="visible", timeout=15000)
             except:
-                print("\n⚠️  Password input not found - may need manual intervention")
-                print("━" * 60)
+                print("\nâš ï¸  Password input not found - may need manual intervention")
+                print("â”" * 60)
                 print("  Please enter your password manually if prompted")
                 print("  Waiting 20 seconds...")
-                print("━" * 60)
+                print("â”" * 60)
                 await page.wait_for_timeout(20000)
                 
                 # Try again
@@ -193,50 +193,50 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
                     raise Exception("Password input field not found after waiting")
             
             await password_input.fill(password)
-            print("  → Password entered")
+            print("  â†’ Password entered")
             await page.wait_for_timeout(1000)
             
             # Click Next
             next_button = page.locator("button:has-text('Next'), #passwordNext").first
             await next_button.click()
-            print("  → Clicked 'Next'")
+            print("  â†’ Clicked 'Next'")
             await page.wait_for_timeout(5000)
             
             # Check for 2FA or security verification
-            print("  → Checking for 2FA/security verification...")
+            print("  â†’ Checking for 2FA/security verification...")
             try:
                 # Look for 2FA input or verification prompts
                 two_fa_input = page.locator("input[type='tel'], input[aria-label*='code'], input[placeholder*='code']").first
                 if await two_fa_input.is_visible(timeout=5000):
-                    print("\n⚠️  2FA VERIFICATION REQUIRED!")
-                    print("━" * 60)
+                    print("\nâš ï¸  2FA VERIFICATION REQUIRED!")
+                    print("â”" * 60)
                     print("  Please complete the 2-factor authentication:")
-                    print("  ✓ Enter the verification code from your device")
-                    print("  ✓ The script will wait for 45 seconds")
-                    print("━" * 60)
+                    print("  âœ“ Enter the verification code from your device")
+                    print("  âœ“ The script will wait for 45 seconds")
+                    print("â”" * 60)
                     await page.wait_for_timeout(45000)  # Wait 45 seconds for 2FA
-                    print("  → Continuing after 2FA wait...")
+                    print("  â†’ Continuing after 2FA wait...")
             except:
-                print("  → No 2FA detected")
+                print("  â†’ No 2FA detected")
             
             # STEP 7: Wait for new chat page to load
             print("[STEP 7] Waiting for new chat page to load...")
             # Wait for redirect to ChatGPT
             try:
                 await page.wait_for_url("**/chat.openai.com/**", timeout=30000)
-                print("  → Redirected to ChatGPT")
+                print("  â†’ Redirected to ChatGPT")
             except:
-                print("  ⚠ URL didn't change, but continuing...")
+                print("  âš  URL didn't change, but continuing...")
             
             await page.wait_for_timeout(5000)
-            print("  → Chat page loaded")
+            print("  â†’ Chat page loaded")
             
             # STEP 8: Click on + button
             print("[STEP 8] Clicking + button...")
             plus_button = page.locator("button:has-text('+'), button[aria-label*='ttach'], button[aria-label*='upload']").first
             await plus_button.wait_for(state="visible", timeout=15000)
             await plus_button.click()
-            print("  → + button clicked")
+            print("  â†’ + button clicked")
             await page.wait_for_timeout(2000)
             
             # STEP 9: Click "Create image" option
@@ -244,7 +244,7 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
             create_image = page.locator("text=/Create.*image/i, button:has-text('Create image')").first
             await create_image.wait_for(state="visible", timeout=10000)
             await create_image.click()
-            print("  → 'Create image' clicked")
+            print("  â†’ 'Create image' clicked")
             await page.wait_for_timeout(3000)
             
             # STEP 10: Click + again to upload images
@@ -252,7 +252,7 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
             upload_button = page.locator("button:has-text('+'), button[aria-label*='ttach'], button[aria-label*='upload']").first
             await upload_button.wait_for(state="visible", timeout=10000)
             await upload_button.click()
-            print("  → + button clicked for upload")
+            print("  â†’ + button clicked for upload")
             await page.wait_for_timeout(1000)
             
             # STEP 11: Upload both images
@@ -265,8 +265,8 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
                 os.path.abspath(csidc_image_path),
                 os.path.abspath(osm_image_path)
             ])
-            print(f"  → Uploaded CSIDC: {os.path.basename(csidc_image_path)}")
-            print(f"  → Uploaded OSM: {os.path.basename(osm_image_path)}")
+            print(f"  â†’ Uploaded CSIDC: {os.path.basename(csidc_image_path)}")
+            print(f"  â†’ Uploaded OSM: {os.path.basename(osm_image_path)}")
             await page.wait_for_timeout(3000)
             
             # STEP 12: Type the prompt
@@ -276,7 +276,7 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
             text_input = page.locator("textarea, input[type='text']").first
             await text_input.wait_for(state="visible", timeout=10000)
             await text_input.fill(prompt)
-            print(f"  → Prompt entered: {prompt}")
+            print(f"  â†’ Prompt entered: {prompt}")
             await page.wait_for_timeout(1000)
             
             # STEP 13: Click send button
@@ -285,7 +285,7 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
             
             # Alternative: just press Enter
             await text_input.press("Enter")
-            print("  → Message sent (pressed Enter)")
+            print("  â†’ Message sent (pressed Enter)")
             await page.wait_for_timeout(2000)
             
             # STEP 14: Wait for image generation
@@ -302,7 +302,7 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
                 count = await generated_images.count()
                 
                 if count > 0:
-                    print(f"  → Image generated! Found {count} image(s)")
+                    print(f"  â†’ Image generated! Found {count} image(s)")
                     image_found = True
                     break
                 
@@ -310,7 +310,7 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
                 waited += 3
                 
                 if waited % 15 == 0:
-                    print(f"  ⏳ Still waiting... ({waited}s elapsed)")
+                    print(f"  â³ Still waiting... ({waited}s elapsed)")
             
             if not image_found:
                 result["error"] = "Timeout: Image generation took too long"
@@ -320,7 +320,7 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
             print("[STEP 15] Clicking on generated image...")
             generated_image = generated_images.last
             await generated_image.click()
-            print("  → Image clicked")
+            print("  â†’ Image clicked")
             await page.wait_for_timeout(2000)
             
             # STEP 16: Click save/download button at top right
@@ -340,7 +340,7 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
                 try:
                     download_btn = page.locator(selector).first
                     if await download_btn.is_visible(timeout=3000):
-                        print(f"  → Found download button: {selector}")
+                        print(f"  â†’ Found download button: {selector}")
                         
                         async with page.expect_download(timeout=30000) as download_info:
                             await download_btn.click()
@@ -355,7 +355,7 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
                         await download.save_as(filepath)
                         result["superimposed_image"] = filepath
                         result["status"] = "success"
-                        print(f"  ✅ Image downloaded: {filepath}")
+                        print(f"  âœ… Image downloaded: {filepath}")
                         download_clicked = True
                         break
                 except Exception as e:
@@ -363,7 +363,7 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
             
             if not download_clicked:
                 # Try alternative: right-click and save
-                print("  → Trying right-click method...")
+                print("  â†’ Trying right-click method...")
                 try:
                     await generated_image.click(button="right")
                     await page.wait_for_timeout(500)
@@ -381,15 +381,15 @@ async def superimpose_with_chatgpt(csidc_image_path, osm_image_path, area_name, 
                         await download.save_as(filepath)
                         result["superimposed_image"] = filepath
                         result["status"] = "success"
-                        print(f"  ✅ Image downloaded via right-click: {filepath}")
+                        print(f"  âœ… Image downloaded via right-click: {filepath}")
                 except Exception as e:
                     result["error"] = f"Could not download image: {str(e)}"
-                    print(f"  ❌ Download failed: {str(e)}")
+                    print(f"  âŒ Download failed: {str(e)}")
             
             await page.wait_for_timeout(2000)
             
         except Exception as e:
-            print(f"\n❌ Error in ChatGPT automation: {e}")
+            print(f"\nâŒ Error in ChatGPT automation: {e}")
             result["error"] = str(e)
             import traceback
             traceback.print_exc()
@@ -411,9 +411,9 @@ async def main():
     print("="*70)
     print("ChatGPT Image Superimposition - Step-by-Step Automation")
     print("="*70)
-    print(f"📁 CSIDC Image: {csidc_image}")
-    print(f"📁 OSM Image: {osm_image}")
-    print(f"🔐 Login Email: {CHATGPT_EMAIL}")
+    print(f"ðŸ“ CSIDC Image: {csidc_image}")
+    print(f"ðŸ“ OSM Image: {osm_image}")
+    print(f"ðŸ” Login Email: {CHATGPT_EMAIL}")
     print("="*70)
     
     result = await superimpose_with_chatgpt(csidc_image, osm_image, area_name)
@@ -423,9 +423,9 @@ async def main():
     print("="*70)
     print(f"Status: {result['status']}")
     if result['status'] == 'success':
-        print(f"✅ Superimposed Image: {result['superimposed_image']}")
+        print(f"âœ… Superimposed Image: {result['superimposed_image']}")
     else:
-        print(f"❌ Error: {result['error']}")
+        print(f"âŒ Error: {result['error']}")
     print("="*70)
 
 if __name__ == "__main__":
